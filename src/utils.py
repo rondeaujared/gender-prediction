@@ -5,3 +5,7 @@ def seed_rng(seed=0):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
+
+def load_config():
+    from dotenv import load_dotenv
+    load_dotenv()

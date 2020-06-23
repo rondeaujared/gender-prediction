@@ -1,4 +1,5 @@
 import unittest
+import os
 
 
 class ReproducibilityTestCase(unittest.TestCase):
@@ -24,6 +25,18 @@ class ReproducibilityTestCase(unittest.TestCase):
         self.assertTrue(
             torch.all(torch.eq(arr, torch.Tensor([8, 7, 1, 4, 8])))
         )
+
+
+class ConfigTestCase(unittest.TestCase):
+
+    def test_dataroot(self):
+        from src.utils import load_config
+        load_config()
+        fail = ''
+        self.assertFalse(os.path.isdir(fail))
+        path = os.environ.get('DATAROOT', fail)
+        self.assertTrue(os.path.isdir(path),
+                        f"Environment variable $DATAROOT {path} is not set.")
 
 
 if __name__ == '__main__':
