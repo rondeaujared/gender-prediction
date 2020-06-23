@@ -26,6 +26,13 @@ class ReproducibilityTestCase(unittest.TestCase):
             torch.all(torch.eq(arr, torch.Tensor([8, 7, 1, 4, 8])))
         )
 
+    def test_random_rng(self):
+        import random
+        from src.utils import seed_rng
+        seed_rng(3)
+        a = random.randint(0, 10)
+        self.assertEqual(a, 3)
+
 
 class ConfigTestCase(unittest.TestCase):
 
