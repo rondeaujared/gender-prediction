@@ -26,3 +26,8 @@ def cifar10_root():
         import torchvision
         torchvision.datasets.CIFAR10(path, download=True)
     return path
+
+
+def numpy_suppress_scientific():
+    import numpy as np
+    np.set_printoptions(suppress=True)
