@@ -5,3 +5,4 @@ pandas
 pytest
 python-dotenv
 matplotlib
+scikit-learn

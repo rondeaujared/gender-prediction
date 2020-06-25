@@ -45,6 +45,16 @@ class ConfigTestCase(unittest.TestCase):
         self.assertTrue(os.path.isdir(path),
                         f"Environment variable $DATAROOT {path} is not set.")
 
+    def test_cuda_devices(self):
+        """
+        Checks to see if Tensor can be pushed to GPU indexed at 0
+        :return:
+        """
+        import torch
+        for device in [torch.device('cpu'), torch.device('cuda:0')]:
+            a = torch.Tensor([1, 2, 3]).to(device=device)
+            self.assertEqual(device, a.device)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -35,7 +35,6 @@ class VisualizationTestCase(unittest.TestCase):
 
         for labels in [np.array([1, 2, 2, 3]), np.array(['red', 'red', 'green', 'blue'])]:
             colors = labels_to_colors(labels)
-            print(colors)
             self.assertEqual(len(np.unique(labels)), len(np.unique(colors)))
 
     def test_plot_2d(self):
@@ -53,9 +52,21 @@ class ClusteringTestCase(unittest.TestCase):
     def test_k_means(self):
         import numpy as np
         from src.utils import numpy_suppress_scientific
+        from src.visualization import k_means, plot_2d
         numpy_suppress_scientific()
         data = np.concatenate([np.random.normal(mu, 1, (5, 2)) for mu in [1, 10, 100]], axis=0)
-        print(data, data.shape)
+        for k in [2, 3]:
+            out = k_means(data, n_clusters=k)
+            labels, centers = out['labels'], out['centers']
+            plot_2d(data, labels, f'plots/test_k_means_{k}.png')
+
+    def test_k_means2(self):
+        import numpy as np
+        np.set_printoptions(suppress=True)
+        from src.visualization import k_means
+        data = np.concatenate([np.random.normal(mu, 1, (5, 101)) for mu in [1, 10, 100]], axis=0)
+        out = k_means(data, n_clusters=2)
+        # print(f"centroids: {out['centers']}")
 
 
 if __name__ == '__main__':

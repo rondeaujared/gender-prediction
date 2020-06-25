@@ -74,14 +74,12 @@ def plot_2d(data, labels=None, savefig=''):
     :param data: nparray (N, M)
     :return:
     """
-    import numpy as np
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
     if labels is None:
         colors = ['r' for _ in data[:, 0]]
     else:
         colors = labels_to_colors(labels)
-    print(f"colors: {colors}")
     ax.scatter(data[:, 0], data[:, 1], c=colors)
     ax.set_xlabel(f"x axis")
     ax.set_ylabel(f"y axis")
@@ -92,3 +90,15 @@ def plot_2d(data, labels=None, savefig=''):
         plt.savefig(f'{savefig}')
     else:
         plt.show()
+
+
+def k_means(X, n_clusters):
+    """
+    See https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html#sklearn.cluster.KMeans
+    :param X:
+    :param n_clusters:
+    :return: {'labels': 1-D iterable of int labels, 'centers': np array of cluster centers}
+    """
+    from sklearn.cluster import KMeans
+    kmeans = KMeans(n_clusters=n_clusters).fit(X)
+    return {'labels': kmeans.labels_, 'centers': kmeans.cluster_centers_}
