@@ -145,22 +145,16 @@ def plot_weight_dist(l_name, l_x, savefig=''):
     import matplotlib.pyplot as plt
     ncol = (len(l_name)-1) // 5 + 1
     nrow = 5
-    fig, axs = plt.subplots(ncol, nrow, figsize=(nrow*3, ncol*2))
+    fig, axs = plt.subplots(ncol, nrow, figsize=(nrow*2, ncol*2))
     if len(l_name) == 1:
         axs = [axs]
-    fig.tight_layout()
     for ix, (name, x) in enumerate(zip(l_name, l_x)):
         row = ix//5
         col = ix % 5
         axs[row, col].set_xlabel(name)
         axs[row, col].hist(x)
+    fig.tight_layout()
     if savefig:
-        plt.savefig(f'{savefig}')
+        plt.savefig(f'{savefig}', bbox_inches='tight')
     else:
         plt.show()
-
-
-def get_activation(name):
-    def hook(model, input, output):
-        activation[name] = output.detach()
-    return hook
