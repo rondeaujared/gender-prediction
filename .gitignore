@@ -133,3 +133,4 @@ dmypy.json
 # Manually Defined Ignores #
 ############################
 /tests/plots/
+/tests/tmp/
