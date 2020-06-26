@@ -64,6 +64,82 @@ class VisualizationTestCase(unittest.TestCase):
         data = np.stack([x, y], axis=1)
         scatterplot_images(data, images, f'plots/test_scatterplot_images.png')
 
+    def test_plot_weight_dist(self):
+        import torch
+        import numpy as np
+        from torchvision.models import resnet18
+        from src.visualization import plot_weight_dist
+
+        with torch.no_grad():
+            model = resnet18(pretrained=True)
+            model.eval()
+            l_name, l_x = [], []
+
+            for n, weight in model.named_parameters():
+                w = np.array(weight.detach().flatten())
+                l_name.append(f"{n}\nmean={w.mean():.3f}\nstd={w.std():.3f}")
+                l_x.append(w)
+
+        plot_weight_dist(l_name, l_x, f'plots/test_plot_weight_dist.png')
+
+    def test_plot_activation_dist(self):
+        import torch
+        import numpy as np
+        from torchvision.models import resnet18
+        from src.visualization import plot_weight_dist, sample_dataset
+
+        activations = {}
+        def get_activation(name):
+            def hook(model, input, output):
+                activations[name] = output.detach()
+            return hook
+
+        with torch.no_grad():
+            model = resnet18(pretrained=True)
+            model.eval()
+            l_name, l_x = [], []
+            for n, weight in model.named_modules():
+                weight.register_forward_hook(get_activation(n))
+            images, labels = sample_dataset(self.ds, self.BATCH_SIZE)
+            model(images)
+            for k, v in activations.items():
+                w = np.array(v.detach().flatten())
+                l_name.append(f"{k}\nmean={w.mean():.3f}\nstd={w.std():.3f}")
+                l_x.append(w)
+        plot_weight_dist(l_name, l_x, f'plots/test_plot_activation_dist.png')
+
+    def test_plot_gradient_dist(self):
+        import torch
+        import numpy as np
+        from torchvision.models import resnet18
+        from src.visualization import plot_weight_dist, sample_dataset
+
+        gradients = {}
+        grad_norm = {}
+
+        def get_gradients(name):
+            def hook(model, grad_input, grad_output):
+                gradients[name] = grad_output
+                grad_norm[name] = grad_output[0].norm()
+            return hook
+
+        loss_fn = torch.nn.CrossEntropyLoss()
+        model = resnet18(pretrained=False)
+        model.train()
+        l_name, l_x = [], []
+        for n, weight in model.named_modules():
+            weight.register_backward_hook(get_gradients(n))
+        images, labels = sample_dataset(self.ds, self.BATCH_SIZE)
+        out = model(images)
+        err = loss_fn(out, labels)
+        err.backward()
+        for k, v in gradients.items():
+            w = np.array(v[0].detach().flatten())
+            norm = grad_norm[k].numpy()
+            l_name.append(f"{k}\nmean={w.mean():.3f}\nstd={w.std():.3f}\nnorm:{norm:.3f}")
+            l_x.append(w)
+        plot_weight_dist(l_name, l_x)#, f'plots/test_plot_gradient_dist.png')
+
 
 class ClusteringTestCase(unittest.TestCase):
     def setUp(self) -> None:
