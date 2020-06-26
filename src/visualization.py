@@ -102,3 +102,40 @@ def k_means(X, n_clusters):
     from sklearn.cluster import KMeans
     kmeans = KMeans(n_clusters=n_clusters).fit(X)
     return {'labels': kmeans.labels_, 'centers': kmeans.cluster_centers_}
+
+
+def scatterplot_images(data, images, savefig=''):
+    """
+    :param data:    (N, 2) nparray
+    :param images:  [*PIL.Image]
+    :param savefig: str or None path to save
+    :return:
+    """
+    import matplotlib.pyplot as plt
+    import io
+    import numpy as np
+    import math
+    from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+
+    def getImage(_data):
+        return OffsetImage(plt.imread(_data))
+
+    x, y = data[:, 0], data[:, 1]
+    max_x, max_y = np.max(x), np.max(y)
+    DPI = 96  # See http://auctionrepair.com/pixels.html
+    width = math.ceil(max_x / DPI)
+    height = math.ceil(max_y / DPI)
+    fig, ax = plt.subplots(figsize=(width, height))
+    fig.tight_layout()
+    ax.scatter(x, y)
+
+    for x0, y0, image in zip(x, y, images):
+        b = io.BytesIO()
+        image.save(b, "png")
+        b.seek(0)
+        ab = AnnotationBbox(getImage(b), (x0, y0), frameon=False)
+        ax.add_artist(ab)
+    if savefig:
+        plt.savefig(f'{savefig}')
+    else:
+        plt.show()

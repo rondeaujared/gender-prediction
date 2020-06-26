@@ -1,34 +1,4 @@
 
-def scatterplot_images(data, images, savefig=''):
-    """
-
-    :param data:    (N, 2) nparray
-    :param images:  [*PIL.Image]
-    :param savefig: str or None path to save
-    :return:
-    """
-    import matplotlib.pyplot as plt
-    import io
-    from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-
-    def getImage(_data):
-        return OffsetImage(plt.imread(_data))
-    fig, ax = plt.subplots()
-    x, y = data[:, 0], data[:, 1]
-    ax.scatter(x, y)
-
-    for x0, y0, image in zip(x, y, images):
-        b = io.BytesIO()
-        image.save(b, "png")
-        b.seek(0)
-        ab = AnnotationBbox(getImage(b), (x0, y0), frameon=False)
-        ax.add_artist(ab)
-    plt.show()
-    if savefig:
-        plt.savefig(f'{savefig}')
-    else:
-        plt.show()
-
 
 def stack_outputs_and_plot():
     """
@@ -69,4 +39,6 @@ def stack_outputs_and_plot():
     pca = PCA(n_components=2)
     pca.fit(outputs)
     data = pca.transform(outputs)
+
+    from src.visualization import scatterplot_images
     scatterplot_images(data, l_images, f'plots/scatterplot_images.png')

@@ -44,6 +44,26 @@ class VisualizationTestCase(unittest.TestCase):
         for labels, s in zip([np.array([1]*5 + [2]*5 + [3]*5), None], [1, 2]):
             plot_2d(data, labels, f'plots/test_plot_2d_{s}.png')
 
+    def test_scatterplot_images(self):
+        import numpy as np
+        from torchvision.transforms import ToPILImage
+        from src.visualization import scatterplot_images, sample_dataset
+        from src.utils import seed_rng
+        seed_rng(0)
+        images, labels = sample_dataset(self.ds, 100)
+        labels = labels.numpy()
+        trans = ToPILImage()
+        images = [trans(img) for img in images]
+        lbl2x0 = {lbl: 48*ix+32 for lbl, ix in enumerate(np.unique(labels))}
+        cnt_lbl = {lbl: 0 for lbl in np.unique(labels)}
+        x, y = [], []
+        for img, lbl in zip(images, labels):
+            x.append(lbl2x0[lbl])
+            y.append(cnt_lbl[lbl]*48+32)
+            cnt_lbl[lbl] += 1
+        data = np.stack([x, y], axis=1)
+        scatterplot_images(data, images, f'plots/test_scatterplot_images.png')
+
 
 class ClusteringTestCase(unittest.TestCase):
     def setUp(self) -> None:
