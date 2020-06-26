@@ -1,4 +1,11 @@
 
+def get_files_in_dir(root):
+    from os import listdir
+    from os.path import join, isfile
+    return [join(root, f) for f in listdir(root)
+            if isfile(join(root, f))]
+
+
 def seed_rng(seed=0):
     import torch
     import numpy as np

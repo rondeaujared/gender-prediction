@@ -4,6 +4,8 @@ import os
 
 from src.convnets.s3fd import (s3fd, nms, detect_fast, preprocess_face)
 from src.utils import load_config
+from PIL import Image, ImageDraw, ImageFont
+
 load_config()
 
 FACE_MODEL_WEIGHT_PATH = os.environ.get('FACE_MODEL_WEIGHT_PATH')
@@ -78,33 +80,45 @@ def preds_to_txt(file_preds, log_path):
     :return:
     """
     with open(log_path, 'w') as f:
-        out = f""
-        for path, preds in file_preds:
-            out += f"{path}\n{len(preds)}\n"
-            for pred in preds:
-                out += f"{pred['x1']} {pred['y1']} {pred['width']} {pred['height']}\n"
-        f.write(out)
+        out = [f"{path} {pred['x1']} {pred['y1']} {pred['width']} {pred['height']}\n"
+               for path, preds in file_preds for pred in preds]
+        f.writelines(out)
 
 
 def txt_to_preds(log_path):
-    def n(_f):
-        return _f.readline().strip('\n')
-    file_preds = []
     with open(log_path, 'r') as f:
-        while f.readable():
-            path = n(f)
-            if not path:
-                break
-            nfaces = int(n(f))
-            faces = []
-            for _ in range(nfaces):
-                x1, y1, width, height = n(f).split(' ')
-                face = {
-                    'x1': int(x1),
-                    'y1': int(y1),
-                    'width': int(width),
-                    'height': int(height),
-                }
-                faces.append(face)
-            file_preds.append((path, faces))
+        lines = f.read().splitlines()
+        p2f = {}
+        for line in lines:
+            path, x1, y1, width, height = line.split(' ')
+            if path not in p2f:
+                p2f[path] = []
+            p2f[path].append({
+                'x1': int(x1),
+                'y1': int(y1),
+                'width': int(width),
+                'height': int(height),
+            })
+        file_preds = [(k, v) for k, v in p2f.items()]
     return file_preds
+
+
+def draw_faces(file_preds, savefig):
+    """
+    :param file_preds: [*(str: path, [*{'x1', 'y1', 'width', 'height'}])]
+    :param savefig: folder to save figures in
+    :return: [*(str: path, [*{'x1', 'y1', 'width', 'height'}])] where path has been changed to saved face location
+    """
+    os.makedirs(savefig, exist_ok=True)
+    out = []
+    for path, preds in file_preds:
+        img = Image.open(path)
+        draw = ImageDraw.Draw(img)
+        for pred in preds:
+            x1, y1 = pred['x1'], pred['y1']
+            x2, y2 = x1 + pred['width'], y1 + pred['height']
+            draw.rectangle((x1, y1, x2, y2), outline='red', width=1)
+        save_path = f"{savefig}/{path[path.rfind('/')+1:]}"
+        out.append((save_path, preds))
+        img.save(save_path)
+    return out
