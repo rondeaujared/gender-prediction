@@ -19,6 +19,19 @@ class IMDBTestCase(unittest.TestCase):
         df = unpickle_imdb(f"{self.imdb_root}/imdb.pickle")
         print(df)
 
+    def test_imdb_dataset(self):
+        from src.datasets import ImdbDataset
+        from torchvision.transforms import ToTensor
+        from src.datasets import unpickle_imdb
+        df = unpickle_imdb(f"{self.imdb_root}/imdb.pickle")
+        ds = ImdbDataset(root=self.imdb_root, df=df, transform=ToTensor())
+
+        from torchvision.transforms import ToPILImage
+        pil = ToPILImage()
+        tensor, label = ds[-1]
+        #print(f"Label: {label}")
+        #pil(tensor).show()
+
 
 if __name__ == '__main__':
     unittest.main()

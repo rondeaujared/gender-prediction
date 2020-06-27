@@ -1,7 +1,29 @@
 import numpy as np
 import pandas as pd
 import scipy.io
+import os
 from datetime import timedelta
+from torch.utils.data import Dataset
+from PIL import Image
+
+
+###################
+# BEGIN IMDB-Wiki #
+###################
+class ImdbDataset(Dataset):
+    def __init__(self, root, df, transform, target_transform=None):
+        assert os.path.isdir(root)
+        self.root = root
+        self.trans = transform
+        self.data = [(f"{self.root}/{row[3]}", row[4]) for row in df.itertuples()]
+
+    def __getitem__(self, index):
+        path, label = self.data[index]
+        img = self.trans(Image.open(path).convert("RGB"))
+        return img, label
+
+    def __len__(self):
+        return len(self.data)
 
 
 def unpickle_imdb(path):
@@ -53,3 +75,6 @@ def build_imdb(fname, n=None, save=None, min_age=0, max_age=100):
     if save:
         df.to_pickle(save)
     return df
+###################
+#  END IMDB-Wiki  #
+###################
