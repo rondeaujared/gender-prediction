@@ -15,12 +15,20 @@ class ImdbDataset(Dataset):
         assert os.path.isdir(root)
         self.root = root
         self.trans = transform
-        self.data = [(f"{self.root}/{row[3]}", row[4]) for row in df.itertuples()]
+        self.data = []
+        for row in df.itertuples():
+            path = f"{self.root}/{row[3]}"
+            gender = row[4]
+            try:
+                gender = int(gender)
+            except ValueError:
+                continue
+            self.data.append((path, gender))
 
     def __getitem__(self, index):
         path, label = self.data[index]
         img = self.trans(Image.open(path).convert("RGB"))
-        return img, label
+        return img, int(label)
 
     def __len__(self):
         return len(self.data)
