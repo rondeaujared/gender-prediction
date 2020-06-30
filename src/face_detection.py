@@ -3,9 +3,9 @@ import json
 import os
 
 from src.convnets.s3fd import (s3fd, nms, detect_fast, preprocess_face)
-from src.utils import load_config
+from src.utils import load_config, get_files_in_dir
 from PIL import Image, ImageDraw, ImageFont
-
+from src import LOG_DIR
 load_config()
 
 FACE_MODEL_WEIGHT_PATH = os.environ.get('FACE_MODEL_WEIGHT_PATH')
@@ -19,7 +19,6 @@ def bboxlist_to_faces(bboxlist):
     faces = []
     if bboxlist is not None:
         for ix in range(bboxlist.shape[1]):
-            lst = []
             curr = bboxlist[:, ix, :]
             keep = nms(curr, 0.30)
             curr = curr[keep, :]
@@ -35,14 +34,12 @@ def bboxlist_to_faces(bboxlist):
                     pass
                     print(f"problem: {width} {height} {x1} {x2} {y1} {y2}")
                 else:
-                    #faces.append({
-                    lst.append({
+                    faces.append({
                         'x1': int(x1),
                         'y1': int(y1),
                         'width': int(width),
                         'height': int(height),
                     })
-            faces.append(lst)
     return faces
 
 
@@ -53,7 +50,7 @@ def predict_face(model, paths):
             img = torch.Tensor(preprocess_face(path)).unsqueeze(0).to(device=DEVICE)
             preds = model(img)
             bboxlist = detect_fast(preds)
-            faces = bboxlist_to_faces(bboxlist)[0]
+            faces = bboxlist_to_faces(bboxlist)
             l_preds.append((path, faces))
     return l_preds
 
@@ -101,6 +98,17 @@ def txt_to_preds(log_path):
             })
         file_preds = [(k, v) for k, v in p2f.items()]
     return file_preds
+
+
+def extract_faces(root):
+    files = get_files_in_dir(root)
+    images = os.path.join(f"{LOG_DIR}", "images.txt")
+    with open(images, 'w') as f:
+        [f.write(f'{item}\n') for item in files]
+    l_faces = predict_faces(images)
+    preds_txt = os.path.join(f"{LOG_DIR}", "images_face_preds.txt")
+    preds_to_txt(l_faces, preds_txt)
+    return preds_txt
 
 
 def draw_faces(file_preds, savefig):

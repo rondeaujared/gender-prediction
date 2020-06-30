@@ -10,7 +10,7 @@ class IMDBTestCase(unittest.TestCase):
 
     def test_build_imdb(self):
         from src.datasets import build_imdb
-        df = build_imdb(f"{self.imdb_root}/imdb.mat", n=1000, save=f"{self.imdb_root}/imdb.pickle")
+        df = build_imdb(f"{self.imdb_root}/imdb.mat", n=None, save=f"{self.imdb_root}/imdb.pickle")
         print(df)
         print(df[:5])
 

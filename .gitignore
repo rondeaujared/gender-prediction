@@ -134,3 +134,4 @@ dmypy.json
 ############################
 /tests/plots/
 /tests/tmp/
+/src/tmp/
