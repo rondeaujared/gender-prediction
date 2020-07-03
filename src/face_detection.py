@@ -47,11 +47,14 @@ def predict_face(model, paths):
     l_preds = []
     with torch.no_grad():
         for path in paths:
-            img = torch.Tensor(preprocess_face(path)).unsqueeze(0).to(device=DEVICE)
-            preds = model(img)
-            bboxlist = detect_fast(preds)
-            faces = bboxlist_to_faces(bboxlist)
-            l_preds.append((path, faces))
+            try:
+                img = torch.Tensor(preprocess_face(path)).unsqueeze(0).to(device=DEVICE)
+                preds = model(img)
+                bboxlist = detect_fast(preds)
+                faces = bboxlist_to_faces(bboxlist)
+                l_preds.append((path, faces))
+            except RuntimeError as E:
+                print(f"{E}")
     return l_preds
 
 

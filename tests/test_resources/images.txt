@@ -1,0 +1,3 @@
+test_images/thumbnails-06.jpeg
+test_images/thumbnails-5.jpeg
+test_images/thumbnails-03.jpeg
