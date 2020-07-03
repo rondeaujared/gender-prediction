@@ -30,6 +30,7 @@ class TestGenderEstimation(unittest.TestCase):
 
     def test_gender_analyze(self):
         import os
+        import pickle
         from src.gender_estimation import gender_analyze
         from src.datasets import ImdbDataset, unpickle_imdb
         from src.utils import load_config
@@ -44,9 +45,15 @@ class TestGenderEstimation(unittest.TestCase):
         ])
         imdb_root = os.environ['IMDB_ROOT']
         df = unpickle_imdb(f"{imdb_root}/imdb.pickle")
-        ds = ImdbDataset(root=imdb_root, df=df[:100], transform=trans, include_path=True)
+        ds = ImdbDataset(root=imdb_root, df=df[:250], transform=trans, include_path=True)
         log = gender_analyze(self.weights, ds)
-        print(log)
+        pickle.dump(log, open('tmp/gender_analyze_log.p', 'wb'))
+
+    def test_cluster(self):
+        import pickle
+        from src.gender_estimation import cluster
+        log = pickle.load(open('tmp/gender_analyze_log.p', 'rb'))
+        cluster(log)
 
 
 if __name__ == '__main__':

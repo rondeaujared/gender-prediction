@@ -111,7 +111,6 @@ def gender_predict(path_face, weights):
 def gender_analyze(weights, dset):
     device, trans, model = _model_init(weights)
     dl = DataLoader(dset, batch_size=2, shuffle=False, num_workers=0, pin_memory=True)
-    l_preds = []
     log = []
     activations = {}
 
@@ -143,3 +142,40 @@ def gender_analyze(weights, dset):
                 })
 
     return log
+
+
+def cluster(log):
+    from src.visualization import k_means
+    nl = []
+    for item in log:
+        ni = {**item}
+        #ni['activation'] = ni['activation']['layer4']
+        ni['activation'] = ni['activation']['avgpool']
+        nl.append(ni)
+    acts = np.stack([item['activation'] for item in nl], axis=0)
+    print(acts.shape)
+    trans = transforms.Compose([
+        transforms.Resize(64),
+        transforms.CenterCrop(64),
+    ])
+    l_images = [trans(Image.open(item['path']).convert("RGB")) for item in nl]
+
+    from sklearn.decomposition import PCA
+    pca = PCA(n_components=2)
+    pca.fit(acts)
+    data = pca.transform(acts)
+
+    from src.visualization import scatterplot_images
+    # scatterplot_images(data, l_images, f'plots/gender_scatterplot_images.png')
+
+    out = k_means(acts, n_clusters=10)
+    k_lbl, centers = out['labels'], out['centers']
+    lbl2x0 = {lbl: 64*1.5*ix+64 for lbl, ix in enumerate(np.unique(k_lbl))}
+    cnt_lbl = {lbl: 0 for lbl in np.unique(k_lbl)}
+    x, y = [], []
+    for img, lbl in zip(l_images, k_lbl):
+        x.append(lbl2x0[lbl])
+        y.append(cnt_lbl[lbl]*64*1.5+32)
+        cnt_lbl[lbl] += 1
+    data = np.stack([x, y], axis=1)
+    scatterplot_images(data, l_images, f'plots/gender_scatterplot_images.png')
