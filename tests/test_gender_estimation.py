@@ -28,6 +28,26 @@ class TestGenderEstimation(unittest.TestCase):
         l_genders = gender_txt_to_preds(self.gender_preds)
         draw_genders(l_genders, 'tmp/drawn_genders')
 
+    def test_gender_analyze(self):
+        import os
+        from src.gender_estimation import gender_analyze
+        from src.datasets import ImdbDataset, unpickle_imdb
+        from src.utils import load_config
+        from src.convnets.utils import IMAGENET_MEAN, IMAGENET_STD
+        from torchvision import transforms
+        load_config()
+        trans = transforms.Compose([
+            transforms.Resize(64),
+            transforms.CenterCrop(64),
+            transforms.ToTensor(),
+            transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
+        ])
+        imdb_root = os.environ['IMDB_ROOT']
+        df = unpickle_imdb(f"{imdb_root}/imdb.pickle")
+        ds = ImdbDataset(root=imdb_root, df=df[:100], transform=trans, include_path=True)
+        log = gender_analyze(self.weights, ds)
+        print(log)
+
 
 if __name__ == '__main__':
     unittest.main()

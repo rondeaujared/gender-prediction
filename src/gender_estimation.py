@@ -1,6 +1,7 @@
 import os
 import datetime
 import torch
+import numpy as np
 import torch.nn.functional as F
 from torch import nn
 from torch.optim import SGD, Adam
@@ -77,7 +78,7 @@ def gender_preds_to_txt(file_preds, log_path):
         f.writelines(out)
 
 
-def gender_predict(path_face, weights):
+def _model_init(weights):
     device = torch.device('cuda')
     trans = transforms.Compose([
         transforms.Resize(64),
@@ -92,6 +93,11 @@ def gender_predict(path_face, weights):
         model.load_state_dict(torch.load(weights))
     model.to(device)
     model.eval()
+    return device, trans, model
+
+
+def gender_predict(path_face, weights):
+    device, trans, model = _model_init(weights)
     l_preds = []
     with torch.no_grad():
         for path, face in path_face:
@@ -102,3 +108,38 @@ def gender_predict(path_face, weights):
     return l_preds
 
 
+def gender_analyze(weights, dset):
+    device, trans, model = _model_init(weights)
+    dl = DataLoader(dset, batch_size=2, shuffle=False, num_workers=0, pin_memory=True)
+    l_preds = []
+    log = []
+    activations = {}
+
+    def get_activation(name):
+        def hook(model, input, output):
+            activations[name] = output.detach()
+        return hook
+    for n, weight in model.named_modules():
+        weight.register_forward_hook(get_activation(n))
+
+    with torch.no_grad():
+        for ix, (img, label, path) in enumerate(dl):
+            img = img.to(device=device)
+            labels = label.to(device=device, dtype=torch.int64)
+            preds = model(img)
+            _, pred_class = torch.max(preds.data, 1)
+            _acts = {_ix: {} for _ix in range(img.shape[0])}
+            for k, v in activations.items():
+                w = np.array(v.cpu().detach())
+                for _ix in range(w.shape[0]):
+                    _acts[_ix][k] = w[_ix].flatten()
+
+            for _ix, (p, lbl, pred) in enumerate(zip(path, label, pred_class)):
+                log.append({
+                    'path': p,
+                    'label': lbl.item(),
+                    'pred': pred.item(),
+                    'activation': _acts[_ix],
+                })
+
+    return log
