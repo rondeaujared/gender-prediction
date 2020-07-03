@@ -52,8 +52,19 @@ class TestGenderEstimation(unittest.TestCase):
     def test_cluster(self):
         import pickle
         from src.gender_estimation import cluster
-        log = pickle.load(open('tmp/gender_analyze_log.p', 'rb'))
-        cluster(log)
+        # log = pickle.load(open('tmp/gender_analyze_log.p', 'rb'))
+        log = pickle.load(open('tmp/gender_activations_log.p', 'rb'))
+        cluster(log, f'plots/gender_scatterplot_images.png')
+
+    def test_gender_activations(self):
+        import pickle
+        from src.gender_estimation import gender_activations
+        from src.face_detection import txt_to_preds
+        from src.gender_estimation import gender_predict, gender_preds_to_txt
+        l_faces = txt_to_preds(self.face_preds)
+        path_face = [(path, dict(face)) for path, flist in l_faces for face in flist]
+        log = gender_activations(path_face, self.weights)
+        pickle.dump(log, open('tmp/gender_activations_log.p', 'wb'))
 
 
 if __name__ == '__main__':

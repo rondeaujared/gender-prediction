@@ -108,6 +108,37 @@ def gender_predict(path_face, weights):
     return l_preds
 
 
+def gender_activations(path_face, weights):
+    device, trans, model = _model_init(weights)
+    log = []
+    activations = {}
+
+    def get_activation(name):
+        def hook(model, input, output):
+            activations[name] = output.detach()
+        return hook
+    for n, weight in model.named_modules():
+        weight.register_forward_hook(get_activation(n))
+
+    with torch.no_grad():
+        for path, face in path_face:
+            img = preprocess(path, face, trans).unsqueeze(0).to(device=device)
+            preds = model(img)
+            _acts = {}
+            for k, v in activations.items():
+                w = np.array(v.cpu().detach())
+                _acts[k] = w[0].flatten()
+            _, pred_class = torch.max(preds.data, 1)
+            log.append({
+                'path': path,
+                'face': {**face},
+                'gender': pred_class.item(),
+                'activation': _acts,
+            })
+
+    return log
+
+
 def gender_analyze(weights, dset):
     device, trans, model = _model_init(weights)
     dl = DataLoader(dset, batch_size=2, shuffle=False, num_workers=0, pin_memory=True)
@@ -144,7 +175,7 @@ def gender_analyze(weights, dset):
     return log
 
 
-def cluster(log):
+def cluster(log, savefig, nclusters=2):
     from src.visualization import k_means
     nl = []
     for item in log:
@@ -158,17 +189,11 @@ def cluster(log):
         transforms.Resize(64),
         transforms.CenterCrop(64),
     ])
-    l_images = [trans(Image.open(item['path']).convert("RGB")) for item in nl]
-
-    from sklearn.decomposition import PCA
-    pca = PCA(n_components=2)
-    pca.fit(acts)
-    data = pca.transform(acts)
+    # l_images = [trans(Image.open(item['path']).convert("RGB")) for item in nl]
+    l_images = [preprocess(item['path'], item['face'], trans) for item in nl]
 
     from src.visualization import scatterplot_images
-    # scatterplot_images(data, l_images, f'plots/gender_scatterplot_images.png')
-
-    out = k_means(acts, n_clusters=10)
+    out = k_means(acts, n_clusters=nclusters)
     k_lbl, centers = out['labels'], out['centers']
     lbl2x0 = {lbl: 64*1.5*ix+64 for lbl, ix in enumerate(np.unique(k_lbl))}
     cnt_lbl = {lbl: 0 for lbl in np.unique(k_lbl)}
@@ -178,4 +203,4 @@ def cluster(log):
         y.append(cnt_lbl[lbl]*64*1.5+32)
         cnt_lbl[lbl] += 1
     data = np.stack([x, y], axis=1)
-    scatterplot_images(data, l_images, f'plots/gender_scatterplot_images.png')
+    scatterplot_images(data, l_images, savefig)

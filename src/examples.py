@@ -141,6 +141,20 @@ def gender_inference(root, weights):
     draw_genders(l_genders, 'tmp/drawn_genders')
 
 
+def gender_activation_inference(root, weights):
+    import os
+    from src import LOG_DIR, FONT_ROOT
+    from src.face_detection import (txt_to_preds, extract_faces)
+    from src.gender_estimation import (gender_activations, cluster)
+
+    path = extract_faces(root)
+    l_faces = txt_to_preds(path)
+    path_face = [(path, dict(face)) for path, flist in l_faces for face in flist]
+    print(path_face)
+    log = gender_activations(path_face, weights)
+    cluster(log, f'tmp/gender_scatterplot_images.png')
+
+
 def stack_outputs_and_plot():
     """
     (1)  Perform forward pass w/ CNN on batches of CIFAR10
@@ -186,9 +200,12 @@ def stack_outputs_and_plot():
 
 
 if __name__ == '__main__':
-    # _weights = '/mnt/fastdata/cnn-training-logs//6_29_21_11_30_.pth' # Good weights trained on 64x64 images
+    _weights = f'/mnt/fastdata/SavedModels/resnet18_gender.pth'  # Good weights trained on 64x64 images
     # _path = '/mnt/fastdata/anno-ai/gender/streetview'
-    #_path = '/mnt/fastdata/challenging-binary-age/adult/adult-hat'
+    # _path = '/mnt/fastdata/challenging-binary-age/adult/adult-hat'
     # _path = '/mnt/fastdata/appa-real-edited/valid'
-    gender_estimation()
+    _path = '/mnt/fastdata/web_crawler/flickr/teen/pchild'
+    # gender_estimation()
     # gender_inference(_path, _weights)
+    gender_activation_inference(_path, _weights)
+    pass
