@@ -100,7 +100,7 @@ def build_imdb(fname, n=None, save=None, min_age=0, max_age=100):
 #  BEGIN VGGFace2  #
 ####################
 class VGGFaceDataset(Dataset):
-    def __init__(self, root, trans, test=False, include_path=False):
+    def __init__(self, root, trans, test=False, nidents=None, include_path=False):
         """
         Expects data to be stored as follows:
         root/[test_list.txt, train_list.txt, vggface2_test, vggface2_train]
@@ -116,9 +116,15 @@ class VGGFaceDataset(Dataset):
             lines = f.read().splitlines()
         data = []
         identity = {line.split('/')[0]: [] for line in lines}
+
+        if nidents:
+            identity = {ident: imgs for ident, imgs in list(identity.items())[:nidents]}
+
         for line in lines:
-            data.append(os.path.join(root, f'vggface2_{split}/{split}/{line}'))
             iden, img = line.split('/')
+            if nidents and iden not in identity:
+                continue
+            data.append(os.path.join(root, f'vggface2_{split}/{split}/{line}'))
             identity[iden].append(img)
 
         self.root = root
@@ -135,7 +141,8 @@ class VGGFaceDataset(Dataset):
         img = self.trans(Image.open(path).convert("RGB"))
         out = [img]
         if self.include_path: out.append(path)
-        return tuple(out)
+        #return tuple(out)
+        return (img, path)
 
     def __len__(self):
         return len(self.data)

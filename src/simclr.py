@@ -67,7 +67,16 @@ class DataSetWrapper(object):
     def _get_simclr_pipeline_transform(self):
         # get a set of data augmentation transformations as described in the SimCLR paper.
         color_jitter = transforms.ColorJitter(0.8 * self.s, 0.8 * self.s, 0.8 * self.s, 0.2 * self.s)
+        """
         data_transforms = transforms.Compose([transforms.RandomResizedCrop(size=self.input_shape[0]),
+                                              transforms.RandomHorizontalFlip(),
+                                              transforms.RandomApply([color_jitter], p=0.8),
+                                              transforms.RandomGrayscale(p=0.2),
+                                              GaussianBlur(kernel_size=int(0.1 * self.input_shape[0])),
+                                              transforms.ToTensor()])
+        """
+        data_transforms = transforms.Compose([transforms.Resize(size=self.input_shape[0]),
+                                              transforms.RandomCrop(size=self.input_shape[0]),
                                               transforms.RandomHorizontalFlip(),
                                               transforms.RandomApply([color_jitter], p=0.8),
                                               transforms.RandomGrayscale(p=0.2),
@@ -83,7 +92,7 @@ class DataSetWrapper(object):
 
         split = int(np.floor(self.valid_size * num_train))
         train_idx, valid_idx = indices[split:], indices[:split]
-
+        print(f"TRAIN: {len(train_idx)}\tVAL: {len(valid_idx)}")
         # define samplers for obtaining training and validation batches
         train_sampler = SubsetRandomSampler(train_idx)
         valid_sampler = SubsetRandomSampler(valid_idx)
@@ -332,13 +341,36 @@ class SimCLR(object):
         return valid_loss
 
 
+from src.datasets import VGGFaceDataset
+
+
+class MyDataSetWrapper(DataSetWrapper):
+    def __init__(self, root, test, nidents,
+                 batch_size, num_workers, valid_size, input_shape, s):
+        self.root = root
+        self.test = test
+        self.nidents = nidents
+        super().__init__(batch_size, num_workers, valid_size, input_shape, s)
+
+    def get_data_loaders(self):
+        data_augment = self._get_simclr_pipeline_transform()
+        train_dataset = VGGFaceDataset(self.root, trans=SimCLRDataTransform(data_augment), test=self.test,
+                                       nidents=self.nidents)
+        train_loader, valid_loader = self.get_train_validation_data_loaders(train_dataset)
+        return train_loader, valid_loader
+
+
 def main():
     config = yaml.load(open("config.yaml", "r"), Loader=yaml.FullLoader)
-    dataset = DataSetWrapper(config['batch_size'], **config['dataset'])
+    nidents = 100
+    dataset = MyDataSetWrapper(os.environ['VGGFACE_ROOT'], False, nidents,
+                               batch_size=config['batch_size'], **config['dataset'])
 
     simclr = SimCLR(dataset, config)
     simclr.train()
 
 
 if __name__ == "__main__":
+    from src.utils import load_config
+    load_config()
     main()

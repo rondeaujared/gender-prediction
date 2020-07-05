@@ -48,6 +48,12 @@ class VGGFaceTestCase(unittest.TestCase):
     def test_init(self):
         self.assertEqual(str(self.root), str(self.ds.root))
 
+    def test_nidents(self):
+        from src.datasets import VGGFaceDataset
+        n = 5
+        ds = VGGFaceDataset(self.root, self.trans, nidents=n)
+        self.assertEqual(len(ds.identity.keys()), n)
+
     def test_getitem(self):
         item = self.ds[0]
         self.assertIsNotNone(item)
@@ -56,6 +62,7 @@ class VGGFaceTestCase(unittest.TestCase):
     def test_len(self):
         l_ds = len(self.ds)
         self.assertGreater(l_ds, 0)
+        self.assertGreater(l_ds, 10000)
 
     def test_getiden(self):
         iden = 'n000002'
