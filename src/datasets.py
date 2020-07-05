@@ -60,7 +60,9 @@ def build_imdb(fname, n=None, save=None, min_age=0, max_age=100):
     df['age'] = (df['date_taken'] - df['bday']) / timedelta(days=365)
 
     # Get rows with exactly 1 face
+    print(f"N images orig {len(df)}")
     df = df[df['second_face_score'].isna()]
+    print(f"N images with 1 face: {len(df)}")
     df = df[df['face_score'] > 0]
     df = df[(df.age >= min_age) & (df.age <= max_age)]
     df = df.drop(columns=['celeb_id', 'dob', 'name', 'second_face_score'])
@@ -71,6 +73,8 @@ def build_imdb(fname, n=None, save=None, min_age=0, max_age=100):
     df['dx'] = df['face_location'].apply(lambda x: x[2]-x[0])
     df['dy'] = df['face_location'].apply(lambda x: x[3]-x[1])
     df = df[df['face_score'] > 2]
+    print(f"N images with 1 face and high score: {len(df)}")
+    print(df['face_score'].describe())
     ages = df['age'].apply(lambda x: round(x)).astype(int)
     count = {i: len(ages[ages == i]) for i in range(min_age, max_age+1)}
     weights = {i: 1/(max(count.get(i, 1), 1) / len(ages)) for i in range(min_age, max_age+1)}
@@ -90,3 +94,52 @@ def build_imdb(fname, n=None, save=None, min_age=0, max_age=100):
 ###################
 #  END IMDB-Wiki  #
 ###################
+
+
+####################
+#  BEGIN VGGFace2  #
+####################
+class VGGFaceDataset(Dataset):
+    def __init__(self, root, trans, test=False, include_path=False):
+        """
+        Expects data to be stored as follows:
+        root/[test_list.txt, train_list.txt, vggface2_test, vggface2_train]
+        root/vggface2_test/test/[nXXXXXX, ...]/[YYYY_YY.jpg, ...]
+        root/vggface2_train/train/[nXXXXXX, ...]/[YYYY_YY.jpg, ...]
+        :param root:  Absolute path to base folder containing vggface2
+        :param trans: PyTorch transformer
+        :param test:  [True/False] if we should use test split
+        :param include_path:  [True/False] to include abs path to image in label
+        """
+        split = 'test' if test is True else 'train'
+        with open(os.path.join(root, f'{split}_list.txt'), 'r') as f:
+            lines = f.read().splitlines()
+        data = []
+        identity = {line.split('/')[0]: [] for line in lines}
+        for line in lines:
+            data.append(os.path.join(root, f'vggface2_{split}/{split}/{line}'))
+            iden, img = line.split('/')
+            identity[iden].append(img)
+
+        self.root = root
+        self.trans = trans
+        self.include_path = include_path
+        self.identity = identity
+        self.data = data
+
+    def getiden(self, iden):
+        return self.identity.get(iden, None)
+
+    def __getitem__(self, idx):
+        path = self.data[idx]
+        img = self.trans(Image.open(path).convert("RGB"))
+        out = [img]
+        if self.include_path: out.append(path)
+        return tuple(out)
+
+    def __len__(self):
+        return len(self.data)
+
+####################
+#   END VGGFace2   #
+####################

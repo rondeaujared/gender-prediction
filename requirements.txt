@@ -7,3 +7,4 @@ python-dotenv
 matplotlib
 scikit-learn
 opencv-python
+Tensorboard

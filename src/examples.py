@@ -9,7 +9,7 @@ def gender_estimation(weights=None):
     from torch.nn import KLDivLoss, L1Loss, NLLLoss, CrossEntropyLoss
     from torch.utils.data import Dataset, DataLoader, random_split
     from torchvision import transforms
-    from torchvision.models.resnet import resnet18
+    from torchvision.models.resnet import resnet18, resnet50
     from src.utils import load_config
     from src.datasets import unpickle_imdb, ImdbDataset
     from src.convnets.utils import IMAGENET_MEAN, IMAGENET_STD
@@ -19,9 +19,11 @@ def gender_estimation(weights=None):
     df = unpickle_imdb(f"{imdb_root}/imdb.pickle")
     savedir = f"{os.environ['LOG_DIR']}"
     trans = transforms.Compose([
-        transforms.Resize(72),
-        transforms.RandomCrop(64),
-        transforms.RandomHorizontalFlip(0.5),
+        # transforms.Resize(72),
+        #transforms.RandomCrop(64),
+        transforms.Resize(64),
+        transforms.CenterCrop(64),
+        # transforms.RandomHorizontalFlip(0.5),
         transforms.ToTensor(),
         transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
     ])
@@ -29,7 +31,7 @@ def gender_estimation(weights=None):
     print(f"Loaded ds with {len(ds)} items.")
     tr, val = random_split(ds, [len(ds)-len(ds)//10, len(ds)//10])
     loss_fn = CrossEntropyLoss()
-    model = resnet18(pretrained=True)
+    model = resnet50(pretrained=True)
     model.fc = nn.Linear(model.fc.in_features, 2)
     if weights:
         model.load_state_dict(torch.load(weights))
@@ -204,8 +206,8 @@ if __name__ == '__main__':
     # _path = '/mnt/fastdata/anno-ai/gender/streetview'
     # _path = '/mnt/fastdata/challenging-binary-age/adult/adult-hat'
     # _path = '/mnt/fastdata/appa-real-edited/valid'
-    _path = '/mnt/fastdata/web_crawler/flickr/teen/pchild'
-    # gender_estimation()
+    #_path = '/mnt/fastdata/web_crawler/flickr/teen/pchild'
+    gender_estimation()
     # gender_inference(_path, _weights)
-    gender_activation_inference(_path, _weights)
+    #gender_activation_inference(_path, _weights)
     pass
