@@ -21,8 +21,8 @@ def gender_estimation(weights=None):
     trans = transforms.Compose([
         # transforms.Resize(72),
         #transforms.RandomCrop(64),
-        transforms.Resize(64),
-        transforms.CenterCrop(64),
+        transforms.Resize(96),
+        transforms.CenterCrop(96),
         # transforms.RandomHorizontalFlip(0.5),
         transforms.ToTensor(),
         transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
@@ -31,10 +31,24 @@ def gender_estimation(weights=None):
     print(f"Loaded ds with {len(ds)} items.")
     tr, val = random_split(ds, [len(ds)-len(ds)//10, len(ds)//10])
     loss_fn = CrossEntropyLoss()
+
     model = resnet50(pretrained=True)
     model.fc = nn.Linear(model.fc.in_features, 2)
-    if weights:
-        model.load_state_dict(torch.load(weights))
+
+    """
+    from src.simclr import ResNetSimCLR
+    model = ResNetSimCLR('resnet50', 64)
+    #if weights:
+    #    model.load_state_dict(torch.load(weights))
+
+    model.projector = nn.Sequential(
+        nn.Linear(model.n_features, model.n_features, bias=False),
+        nn.ReLU(),
+        nn.Linear(model.n_features, 2, bias=False)
+    )
+    for param in model.encoder.parameters():
+        param.requires_grad = False
+    """
     model.to(device)
     optim = Adam(model.parameters(), lr=3e-4)
     tr_dl = DataLoader(tr, batch_size=16, shuffle=True, num_workers=8, pin_memory=True)
@@ -96,6 +110,7 @@ def gender_estimation(weights=None):
             img = img.to(device=device)
             labels = label.to(device=device, dtype=torch.int64)
             preds = model(img)
+            # _, preds = model(img)
             loss = loss_fn(preds, labels)
             if train:
                 optim.zero_grad()
@@ -202,7 +217,8 @@ def stack_outputs_and_plot():
 
 
 if __name__ == '__main__':
-    _weights = f'/mnt/fastdata/SavedModels/resnet18_gender.pth'  # Good weights trained on 64x64 images
+    #_weights = f'/mnt/fastdata/SavedModels/resnet18_gender.pth'  # Good weights trained on 64x64 images
+    _weights = f'/home/jrondeau/PycharmProjects/cnn-training/src/runs/Jul05_19-54-43_jrondeau-desktop/checkpoints/model.pth'
     # _path = '/mnt/fastdata/anno-ai/gender/streetview'
     # _path = '/mnt/fastdata/challenging-binary-age/adult/adult-hat'
     # _path = '/mnt/fastdata/appa-real-edited/valid'

@@ -76,11 +76,12 @@ class DataSetWrapper(object):
                                               transforms.ToTensor()])
         """
         data_transforms = transforms.Compose([transforms.Resize(size=self.input_shape[0]),
-                                              transforms.RandomCrop(size=self.input_shape[0]),
-                                              transforms.RandomHorizontalFlip(),
-                                              transforms.RandomApply([color_jitter], p=0.8),
-                                              transforms.RandomGrayscale(p=0.2),
-                                              GaussianBlur(kernel_size=int(0.1 * self.input_shape[0])),
+                                              transforms.CenterCrop(size=self.input_shape[0]),
+                                              #transforms.RandomCrop(size=self.input_shape[0]),
+                                              #transforms.RandomHorizontalFlip(),
+                                              #transforms.RandomApply([color_jitter], p=0.8),
+                                              #transforms.RandomGrayscale(p=0.2),
+                                              #GaussianBlur(kernel_size=int(0.1 * self.input_shape[0])),
                                               transforms.ToTensor()])
         return data_transforms
 
@@ -114,7 +115,7 @@ class SimCLRDataTransform(object):
         xj = self.transform(sample)
         return xi, xj
 
-
+"""
 class NTXentLoss(torch.nn.Module):
 
     def __init__(self, device, batch_size, temperature, use_cosine_similarity):
@@ -176,23 +177,76 @@ class NTXentLoss(torch.nn.Module):
         loss = self.criterion(logits, labels)
 
         return loss / (2 * self.batch_size)
+"""
+
+
+class NTXentLoss(nn.Module):
+    def __init__(self, batch_size, temperature, device):
+        super(NTXentLoss, self).__init__()
+        self.batch_size = batch_size
+        self.temperature = temperature
+        self.mask = self.mask_correlated_samples(batch_size)
+        self.device = device
+
+        self.criterion = nn.CrossEntropyLoss(reduction="sum")
+        self.similarity_f = nn.CosineSimilarity(dim=2)
+
+    def mask_correlated_samples(self, batch_size):
+        mask = torch.ones((batch_size * 2, batch_size * 2), dtype=bool)
+        mask = mask.fill_diagonal_(0)
+        for i in range(batch_size):
+            mask[i, batch_size + i] = 0
+            mask[batch_size + i, i] = 0
+        return mask
+
+    def forward(self, z_i, z_j):
+        """
+        We do not sample negative examples explicitly.
+        Instead, given a positive pair, similar to (Chen et al., 2017), we treat the other 2(N − 1) augmented examples within a minibatch as negative examples.
+        """
+
+        p1 = torch.cat((z_i, z_j), dim=0)
+        sim = self.similarity_f(p1.unsqueeze(1), p1.unsqueeze(0)) / self.temperature
+
+        sim_i_j = torch.diag(sim, self.batch_size)
+        sim_j_i = torch.diag(sim, -self.batch_size)
+
+        positive_samples = torch.cat((sim_i_j, sim_j_i), dim=0).reshape(
+            self.batch_size * 2, 1
+        )
+        negative_samples = sim[self.mask].reshape(self.batch_size * 2, -1)
+
+        labels = torch.zeros(self.batch_size * 2).to(self.device).long()
+        logits = torch.cat((positive_samples, negative_samples), dim=1)
+        loss = self.criterion(logits, labels)
+        loss /= 2 * self.batch_size
+        return loss
 
 
 class ResNetSimCLR(nn.Module):
 
-    def __init__(self, base_model, out_dim):
+    def __init__(self, base_model, out_dim, normalize=False):
         super(ResNetSimCLR, self).__init__()
         self.resnet_dict = {"resnet18": models.resnet18(pretrained=True),
                             "resnet50": models.resnet50(pretrained=True)}
-
+        self.normalize = normalize
         resnet = self._get_basemodel(base_model)
-        num_ftrs = resnet.fc.in_features
+        self.encoder = resnet
+        self.n_features = self.encoder.fc.in_features
+        self.encoder.fc = nn.Identity()
 
-        self.features = nn.Sequential(*list(resnet.children())[:-1])
+        self.projector = nn.Sequential(
+            nn.Linear(self.n_features, self.n_features, bias=False),
+            nn.ReLU(),
+            nn.Linear(self.n_features, out_dim, bias=False)
+        )
+
+        #num_ftrs = resnet.fc.in_features
+        #self.features = nn.Sequential(*list(resnet.children())[:-1])
 
         # projection MLP
-        self.l1 = nn.Linear(num_ftrs, num_ftrs)
-        self.l2 = nn.Linear(num_ftrs, out_dim)
+        #self.l1 = nn.Linear(num_ftrs, num_ftrs)
+        #self.l2 = nn.Linear(num_ftrs, out_dim)
 
     def _get_basemodel(self, model_name):
         try:
@@ -203,6 +257,7 @@ class ResNetSimCLR(nn.Module):
             raise ("Invalid model name. Check the config file and pass one of: resnet18 or resnet50")
 
     def forward(self, x):
+        '''
         h = self.features(x)
         h = h.squeeze()
 
@@ -210,6 +265,12 @@ class ResNetSimCLR(nn.Module):
         x = F.relu(x)
         x = self.l2(x)
         return h, x
+        '''
+        h = self.encoder(x)
+        z = self.projector(h)
+        if self.normalize:
+            z = F.normalize(z, dim=1)
+        return h, z
 
 
 def _save_config_file(model_checkpoints_folder):
@@ -225,7 +286,8 @@ class SimCLR(object):
         self.device = self._get_device()
         self.writer = SummaryWriter()
         self.dataset = dataset
-        self.nt_xent_criterion = NTXentLoss(self.device, config['batch_size'], **config['loss'])
+        #self.nt_xent_criterion = NTXentLoss(self.device, config['batch_size'], **config['loss'])
+        self.nt_xent_criterion = NTXentLoss(batch_size=config['batch_size'], device=self.device, **config['loss'])
 
     def _get_device(self):
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -254,7 +316,8 @@ class SimCLR(object):
         model = ResNetSimCLR(**self.config["model"]).to(self.device)
         model = self._load_pre_trained_weights(model)
 
-        optimizer = torch.optim.Adam(model.parameters(), 3e-4, weight_decay=eval(self.config['weight_decay']))
+        #optimizer = torch.optim.Adam(model.parameters(), 3e-2) #weight_decay=eval(self.config['weight_decay']))
+        optimizer = torch.optim.SGD(model.parameters(), lr=.01, momentum=0.9, nesterov=True)
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader), eta_min=0,
                                                                last_epoch=-1)
@@ -280,7 +343,23 @@ class SimCLR(object):
                 xis = xis.to(self.device)
                 xjs = xjs.to(self.device)
 
-                loss = self._step(model, xis, xjs, n_iter)
+                # loss = self._step(model, xis, xjs, n_iter)
+                _, xis = model(xis)
+                _, xjs = model(xjs)
+                x = torch.cat((xis, xjs), dim=0)
+                sim_mat = torch.mm(x, x.T)
+
+                sim_mat_denom = torch.mm(torch.norm(x, dim=1).unsqueeze(1), torch.norm(x, dim=1).unsqueeze(1).T)
+                sim_mat = sim_mat / sim_mat_denom.clamp(min=1e-16)
+                sim_mat = torch.exp(sim_mat / 0.5)
+
+                sim_mat_denom = torch.norm(xis, dim=1) * torch.norm(xjs, dim=1)
+                sim_match = torch.exp(torch.sum(xis * xjs, dim=-1) / sim_mat_denom / 0.5)
+
+                sim_match = torch.cat((sim_match, sim_match), dim=0)
+
+                norm_sum = torch.exp(torch.ones(x.size(0)) / 0.5).cuda()
+                loss = torch.mean(-torch.log(sim_match / (torch.sum(sim_mat, dim=-1) - norm_sum)))
 
                 if n_iter % self.config['log_every_n_steps'] == 0:
                     self.writer.add_scalar('train_loss', loss, global_step=n_iter)

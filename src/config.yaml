@@ -1,4 +1,4 @@
-batch_size: 256
+batch_size: 128
 epochs: 80
 eval_every_n_epochs: 1
 fine_tune_from: None
@@ -8,8 +8,8 @@ weight_decay: 10e-10
 fp16_precision: False
 
 model:
-  out_dim: 512
-  base_model: "resnet18"
+  out_dim: 64
+  base_model: "resnet50"
 
 dataset:
   s: 1
@@ -19,4 +19,3 @@ dataset:
 
 loss:
   temperature: 0.5
-  use_cosine_similarity: True
