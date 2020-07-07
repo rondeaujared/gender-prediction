@@ -21,8 +21,8 @@ def gender_estimation(weights=None):
     trans = transforms.Compose([
         # transforms.Resize(72),
         #transforms.RandomCrop(64),
-        transforms.Resize(96),
-        transforms.CenterCrop(96),
+        transforms.Resize(64),
+        transforms.CenterCrop(64),
         # transforms.RandomHorizontalFlip(0.5),
         transforms.ToTensor(),
         transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
@@ -32,7 +32,8 @@ def gender_estimation(weights=None):
     tr, val = random_split(ds, [len(ds)-len(ds)//10, len(ds)//10])
     loss_fn = CrossEntropyLoss()
 
-    model = resnet50(pretrained=True)
+    #model = resnet50(pretrained=True)
+    model = resnet18(pretrained=True)
     model.fc = nn.Linear(model.fc.in_features, 2)
 
     """

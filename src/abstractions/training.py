@@ -1,0 +1,3 @@
+
+class AbstractTrainer(object):
+    pass
