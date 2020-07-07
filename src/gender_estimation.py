@@ -1,19 +1,132 @@
 import os
 import datetime
+from collections import defaultdict
+
 import torch
 import numpy as np
 import torch.nn.functional as F
 from torch import nn
 from torch.optim import SGD, Adam
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.nn import KLDivLoss, L1Loss, NLLLoss, CrossEntropyLoss
 from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms
 from torchvision.models.resnet import resnet18
 from PIL import Image, ImageDraw, ImageFont
-from src.utils import load_config
 from src.datasets import unpickle_imdb, ImdbDataset
 from src.convnets.utils import IMAGENET_MEAN, IMAGENET_STD
-from src import LOG_DIR, FONT_ROOT
+from src import LOG_DIR, IMDB_ROOT, FONT_ROOT
+from src.abstractions.training import AbstractTrainer
+
+
+class GenderTrainer(AbstractTrainer):
+
+    def log_step(self, output, labels, loss) -> dict:
+        _, pred_class = torch.max(output.data, 1)
+        cnt = labels.size(0)
+        correct = (pred_class == labels).sum().item()
+        acc = correct / cnt
+
+        def _cm(pred_match, labels_match):
+            return ((pred_class == pred_match) & (labels == labels_match)).sum().item()
+
+        log = {
+            'count': cnt,
+            'correct': correct,
+            'acc': acc,
+            'tp': _cm(1, 1),
+            'tn': _cm(0, 0),
+            'fp': _cm(1, 0),
+            'fn': _cm(0, 1),
+            'cnt_p': (labels == 1).sum().item(),
+            'cnt_n': (labels == 0).sum().item(),
+            'loss': loss,
+        }
+        return log
+
+    def log_epoch(self, logs):
+        sums = defaultdict(lambda: 0)
+        for log in logs:
+            for k, v in log.items():
+                sums[k] += v
+        avgs = {
+            'acc': sums['correct'] / sums['count'],
+            'tpr': sums['tp'] / (sums['tp'] + sums['fn']),
+            'tnr': sums['tn'] / (sums['tn'] + sums['fp']),
+            'fpr': sums['fp'] / (sums['fp'] + sums['tn']),
+            'fnr': sums['fn'] / (sums['fn'] + sums['tp']),
+            #  Divide loss by number of forward passes to get mean loss per batch.
+            'loss': sums['loss'] / len(logs)
+        }
+        return avgs
+
+    def tensorboard_log(self, log, train: bool):
+        log = {**log}
+        log['loss/epoch'] = log['loss']
+        log.pop('loss')
+        for k, v in log.items():
+            key = f'{k}/train' if train else f'{k}/valid'
+            self.writer.add_scalar(key, v, self.e)
+
+    def score_fn(self, log, score) -> (bool, float):
+        if score:
+            return log['loss'] < score, log['loss']
+        else:
+            return True, log['loss']
+
+
+class MyScheduler(object):
+    def __init__(self, optim, **kwargs):
+        self.warmup_steps = kwargs.pop('warmup_steps')
+        scheduler_class = kwargs.pop('scheduler_class')
+        self.scheduler = scheduler_class(optim, **kwargs)
+        self.step_cnt = 1
+
+    def step(self):
+        if self.step_cnt > self.warmup_steps:
+            self.scheduler.step()
+        self.step_cnt += 1
+
+    def get_last_lr(self):
+        return self.scheduler.get_last_lr()
+
+
+def train_gender_imdb():
+    model = resnet18(pretrained=True)
+    trans = transforms.Compose([
+        transforms.Resize(64),
+        transforms.CenterCrop(64),
+        transforms.RandomHorizontalFlip(0.5),
+        transforms.ToTensor(),
+        transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
+    ])
+    ds = ImdbDataset(root=IMDB_ROOT, df=unpickle_imdb(f"{IMDB_ROOT}/imdb.pickle"),
+                     transform=trans)
+    tr_ds, val_ds = random_split(ds, [len(ds) - len(ds) // 10, len(ds) // 10])
+    tr_dl = DataLoader(tr_ds, batch_size=16, shuffle=True, num_workers=8, pin_memory=True)
+    val_dl = DataLoader(val_ds, batch_size=16, shuffle=False, num_workers=4, pin_memory=True)
+    loss_fn = CrossEntropyLoss(reduction='mean')
+    optim = Adam
+    optim_kwargs = {
+        'lr': 3e-4,
+        'weight_decay': 1e-6,
+    }
+    scheduler = MyScheduler
+    scheduler_kwargs = {
+        'warmup_steps': len(tr_dl)*2,
+        'scheduler_class': CosineAnnealingLR,
+        'T_max': len(tr_dl),
+        'eta_min': 0,
+        'last_epoch': -1,
+    }
+    trainer = GenderTrainer(model, tr_dl, val_dl, loss_fn,
+                            optim=optim, optim_kwargs=optim_kwargs,
+                            scheduler=scheduler, scheduler_kwargs=scheduler_kwargs)
+    trainer.train(100)
+
+
+if __name__ == '__main__':
+    train_gender_imdb()
 
 
 def preprocess(path, face, trans):
