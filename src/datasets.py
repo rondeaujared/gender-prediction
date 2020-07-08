@@ -5,7 +5,7 @@ import os
 from datetime import timedelta
 from torch.utils.data import Dataset
 from PIL import Image
-
+from src import APPA_ROOT
 
 ###################
 # BEGIN IMDB-Wiki #
@@ -150,3 +150,67 @@ class VGGFaceDataset(Dataset):
 ####################
 #   END VGGFace2   #
 ####################
+
+
+###################
+# BEGIN APPA-REAL #
+###################
+class AppaRealDataset(Dataset):
+    def __init__(self, trans, split, target_trans=None, faceonly=True):
+        assert split in ['train', 'val', 'test']
+        self.root = APPA_ROOT
+        self.split = split
+        self.faceonly = faceonly
+        self.trans = trans
+        if target_trans:
+            self.target_trans = target_trans
+        else:
+            self.target_trans = self.gender_target
+        with open(os.path.join(self.root, f'gt_avg_{self.split}.csv')) as f:
+            lines = f.read().splitlines()
+        header = lines.pop(0).split(',')
+        files = {}
+        for line in lines:
+            file_name, num_ratings, app_avg, app_std, real_age = line.split(',')
+            files[file_name] = {
+                'num_ratings': num_ratings,
+                'app_avg': app_avg,
+                'app_std': app_std,
+                'real_age': real_age,
+            }
+        with open(os.path.join(self.root, f'allcategories_{self.split}.csv')) as f:
+            lines = f.read().splitlines()
+        header = lines.pop(0).split(',')
+        for line in lines:
+            file_name, gender, race, makeup, time, happiness = line.split(',')
+            files[file_name] = {
+                **files[file_name],
+                'gender': gender,
+                'race': race,
+                'makeup': makeup,
+                'time': time,
+                'happiness': happiness,
+            }
+        self.files = files
+        self.data = [k for k in files.keys()]
+
+    def __getitem__(self, idx):
+        fname = self.data[idx]
+        info = self.files[fname]
+        img_path = os.path.join(self.root, f'{self.split}/{fname}')
+        if self.faceonly: img_path += '_face.jpg'
+        img = Image.open(img_path).convert("RGB")
+        img = self.trans(img)
+        label = self.target_trans(info)
+        return img, label
+
+    def __len__(self):
+        return len(self.data)
+
+    @staticmethod
+    def gender_target(info):
+        return 1 if info['gender'] == 'male' else 0
+
+###################
+#  END APPA-REAL  #
+###################

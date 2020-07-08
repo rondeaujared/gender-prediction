@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms
 from torchvision.models.resnet import resnet18
 from PIL import Image, ImageDraw, ImageFont
-from src.datasets import unpickle_imdb, ImdbDataset
+from src.datasets import unpickle_imdb, ImdbDataset, AppaRealDataset
 from src.convnets.utils import IMAGENET_MEAN, IMAGENET_STD
 from src import LOG_DIR, IMDB_ROOT, FONT_ROOT
 from src.abstractions.training import AbstractTrainer
@@ -67,6 +67,9 @@ class GenderTrainer(AbstractTrainer):
         for k, v in log.items():
             key = f'{k}/train' if train else f'{k}/valid'
             self.writer.add_scalar(key, v, self.e)
+        key = f'train' if train else f'valid'
+        self.writer.add_scalars('agg loss/epoch', {key: log['loss/epoch']}, self.e)
+        self.writer.add_scalars('agg acc', {key: log['acc']}, self.e)
 
     def score_fn(self, log, score) -> (bool, float):
         if score:
@@ -91,25 +94,46 @@ class MyScheduler(object):
         return self.scheduler.get_last_lr()
 
 
-def train_gender_imdb():
+def train_gender_imdb(weights=''):
     model = resnet18(pretrained=True)
-    trans = transforms.Compose([
-        transforms.Resize(64),
-        transforms.CenterCrop(64),
+    model.fc = nn.Linear(model.fc.in_features, 2)
+    if weights:
+        model.load_state_dict(torch.load(weights))
+
+    tr_trans = transforms.Compose([
+        transforms.RandomRotation(12),
+        transforms.Resize(144),
+        transforms.RandomCrop(128),
         transforms.RandomHorizontalFlip(0.5),
+        transforms.RandomGrayscale(0.1),
         transforms.ToTensor(),
         transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
     ])
+    ts_trans = transforms.Compose([
+        transforms.Resize(64),
+        transforms.CenterCrop(64),
+        transforms.ToTensor(),
+        transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
+    ])
+    """
+    tr_ds = AppaRealDataset(trans=tr_trans, split='train', target_trans=None, faceonly=True)
+    val_ds = AppaRealDataset(trans=tr_trans, split='val', target_trans=None, faceonly=True)
+    tr_dl = DataLoader(tr_ds, batch_size=16, shuffle=True, num_workers=8, pin_memory=True)
+    val_dl = DataLoader(val_ds, batch_size=16, shuffle=False, num_workers=4, pin_memory=True)
+
+    """
     ds = ImdbDataset(root=IMDB_ROOT, df=unpickle_imdb(f"{IMDB_ROOT}/imdb.pickle"),
-                     transform=trans)
+                     transform=tr_trans)
     tr_ds, val_ds = random_split(ds, [len(ds) - len(ds) // 10, len(ds) // 10])
     tr_dl = DataLoader(tr_ds, batch_size=16, shuffle=True, num_workers=8, pin_memory=True)
     val_dl = DataLoader(val_ds, batch_size=16, shuffle=False, num_workers=4, pin_memory=True)
+    #"""
+
     loss_fn = CrossEntropyLoss(reduction='mean')
     optim = Adam
     optim_kwargs = {
         'lr': 3e-4,
-        'weight_decay': 1e-6,
+        'weight_decay': 1e-5,
     }
     scheduler = MyScheduler
     scheduler_kwargs = {
@@ -122,10 +146,11 @@ def train_gender_imdb():
     trainer = GenderTrainer(model, tr_dl, val_dl, loss_fn,
                             optim=optim, optim_kwargs=optim_kwargs,
                             scheduler=scheduler, scheduler_kwargs=scheduler_kwargs)
-    trainer.train(100)
+    trainer.train(20)
 
 
 if __name__ == '__main__':
+    _weights = f'/mnt/fastdata/cnn-training-logs/_7_7_18_32_33_.pth'
     train_gender_imdb()
 
 
